@@ -99,6 +99,7 @@ app.use('/api/bids', require('./routes/bids'));
 app.use('/api/bid-limits', require('./routes/bidLimits'));
 app.use('/api/reject-reasons', require('./routes/rejectReasons'));
 app.use('/api/deleted-bookings', require('./routes/deletedBookings'));
+app.use('/api/overdue-rides', require('./routes/overdueRides'));
 
 app.use('/api/push-notifications', require('./routes/pushNotifications'));
 app.use('/api/rider-payments', require('./routes/riderPayments'));

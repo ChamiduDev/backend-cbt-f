@@ -68,8 +68,9 @@ exports.createBid = async (req, res) => {
     // Update booking status
     await Booking.findByIdAndUpdate(bookingId, { status: 'bid_placed' });
 
-    // Note: Ride count is incremented when bid is accepted, not when bid is created
-    console.log(`[CREATE BID] Before response - Rider ${riderId} remaining rides: ${globalLimit.getRemainingRides(riderId)}`);
+    // Increment ride count when bid is created
+    await globalLimit.incrementRideCount(riderId);
+    console.log(`[CREATE BID] After increment - Rider ${riderId} remaining rides: ${globalLimit.getRemainingRides(riderId)}`);
 
     req.io.emit('newBid', bid);
 
@@ -116,13 +117,15 @@ exports.createBid = async (req, res) => {
       // Don't fail the bid creation if notification fails
     }
     
-    const finalRemainingRides = globalLimit.getRemainingRides(riderId);
+    // Get the updated remaining rides after increment
+    const updatedGlobalLimit = await RideLimit.getGlobalRideLimit();
+    const finalRemainingRides = updatedGlobalLimit.getRemainingRides(riderId);
     console.log(`[CREATE BID] Final response - Rider ${riderId} remaining rides: ${finalRemainingRides}`);
 
     res.json({
       ...bid.toObject(),
       remainingRides: finalRemainingRides,
-      dailyLimit: globalLimit.dailyLimit
+      dailyLimit: updatedGlobalLimit.dailyLimit
     });
   } catch (err) {
     console.error(err.message);
