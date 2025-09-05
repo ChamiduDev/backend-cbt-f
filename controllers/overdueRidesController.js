@@ -1,5 +1,6 @@
 const Booking = require('../models/Booking');
 const User = require('../models/User');
+const moment = require('moment-timezone');
 
 // @desc    Get all overdue rides
 // @route   GET /api/overdue-rides
@@ -9,23 +10,13 @@ exports.getOverdueRides = async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
     const skip = (page - 1) * limit;
 
-    // Get current time in Sri Lanka timezone (UTC+5:30)
-    const now = new Date();
-    const sriLankaTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    // Get current time in Sri Lanka timezone
+    const now = moment().tz('Asia/Colombo');
 
     // Find bookings that are overdue (past pickup time and still confirmed/in_progress)
     const overdueBookings = await Booking.find({
       status: { $in: ['confirmed', 'in_progress'] },
-      pickupDate: { $lte: sriLankaTime.toISOString().split('T')[0] },
-      $or: [
-        {
-          pickupDate: { $lt: sriLankaTime.toISOString().split('T')[0] }
-        },
-        {
-          pickupDate: sriLankaTime.toISOString().split('T')[0],
-          pickupTime: { $lt: sriLankaTime.toTimeString().split(' ')[0] }
-        }
-      ]
+      pickupDate: { $lt: now.toDate() }, // Pickup date is in the past
     })
     .populate('user', 'fullName email phoneNumber role')
     .populate('rider', 'fullName email phoneNumber vehicles')
@@ -33,24 +24,28 @@ exports.getOverdueRides = async (req, res) => {
     .populate('pickupLocation.sub_area_id', 'name')
     .populate('destinationLocation.city_id', 'name')
     .populate('destinationLocation.sub_area_id', 'name')
-    .sort({ pickupDate: -1, pickupTime: -1 })
+    .sort({ pickupDate: 1 }) // Sort by oldest overdue first
     .skip(skip)
     .limit(parseInt(limit));
 
     // Calculate overdue duration for each booking
     const overdueRides = overdueBookings.map(booking => {
-      const pickupDateTime = new Date(`${booking.pickupDate}T${booking.pickupTime}`);
-      const overdueMs = sriLankaTime - pickupDateTime;
-      const overdueMinutes = Math.floor(overdueMs / (1000 * 60));
-      const overdueHours = Math.floor(overdueMinutes / 60);
-      const remainingMinutes = overdueMinutes % 60;
+      // Create pickup datetime by combining pickupDate and pickupTime in Sri Lanka timezone
+      const pickupDate = moment(booking.pickupDate).format('YYYY-MM-DD');
+      const pickupTime = booking.pickupTime;
+      const pickupDateTime = moment.tz(`${pickupDate} ${pickupTime}`, 'Asia/Colombo');
+      
+      const overdueDuration = moment.duration(now.diff(pickupDateTime));
+      const totalMinutes = Math.max(0, Math.floor(overdueDuration.asMinutes()));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
 
       return {
         ...booking.toObject(),
         overdueDuration: {
-          hours: overdueHours,
-          minutes: remainingMinutes,
-          totalMinutes: overdueMinutes
+          hours: hours,
+          minutes: minutes,
+          totalMinutes: totalMinutes
         },
         pickupDateTime: pickupDateTime.toISOString()
       };
@@ -59,16 +54,7 @@ exports.getOverdueRides = async (req, res) => {
     // Get total count for pagination
     const totalOverdue = await Booking.countDocuments({
       status: { $in: ['confirmed', 'in_progress'] },
-      pickupDate: { $lte: sriLankaTime.toISOString().split('T')[0] },
-      $or: [
-        {
-          pickupDate: { $lt: sriLankaTime.toISOString().split('T')[0] }
-        },
-        {
-          pickupDate: sriLankaTime.toISOString().split('T')[0],
-          pickupTime: { $lt: sriLankaTime.toTimeString().split(' ')[0] }
-        }
-      ]
+      pickupDate: { $lt: now.toDate() },
     });
 
     res.json({
@@ -85,7 +71,8 @@ exports.getOverdueRides = async (req, res) => {
     console.error('Error fetching overdue rides:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error while fetching overdue rides' 
+      message: 'Server error while fetching overdue rides',
+      error: error.message
     });
   }
 };
@@ -95,23 +82,13 @@ exports.getOverdueRides = async (req, res) => {
 // @access  Private (Admin only)
 exports.getOverdueStats = async (req, res) => {
   try {
-    // Get current time in Sri Lanka timezone (UTC+5:30)
-    const now = new Date();
-    const sriLankaTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+    // Get current time in Sri Lanka timezone
+    const now = moment().tz('Asia/Colombo');
 
     // Find overdue bookings
     const overdueBookings = await Booking.find({
       status: { $in: ['confirmed', 'in_progress'] },
-      pickupDate: { $lte: sriLankaTime.toISOString().split('T')[0] },
-      $or: [
-        {
-          pickupDate: { $lt: sriLankaTime.toISOString().split('T')[0] }
-        },
-        {
-          pickupDate: sriLankaTime.toISOString().split('T')[0],
-          pickupTime: { $lt: sriLankaTime.toTimeString().split(' ')[0] }
-        }
-      ]
+      pickupDate: { $lt: now.toDate() }, // Pickup date is in the past
     });
 
     // Calculate statistics
@@ -125,9 +102,13 @@ exports.getOverdueStats = async (req, res) => {
     // Calculate average overdue time
     let totalOverdueMinutes = 0;
     overdueBookings.forEach(booking => {
-      const pickupDateTime = new Date(`${booking.pickupDate}T${booking.pickupTime}`);
-      const overdueMs = sriLankaTime - pickupDateTime;
-      const overdueMinutes = Math.floor(overdueMs / (1000 * 60));
+      // Create pickup datetime by combining pickupDate and pickupTime in Sri Lanka timezone
+      const pickupDate = moment(booking.pickupDate).format('YYYY-MM-DD');
+      const pickupTime = booking.pickupTime;
+      const pickupDateTime = moment.tz(`${pickupDate} ${pickupTime}`, 'Asia/Colombo');
+      
+      const overdueDuration = moment.duration(now.diff(pickupDateTime));
+      const overdueMinutes = Math.max(0, Math.floor(overdueDuration.asMinutes()));
       totalOverdueMinutes += overdueMinutes;
     });
 
@@ -148,7 +129,8 @@ exports.getOverdueStats = async (req, res) => {
     console.error('Error fetching overdue stats:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error while fetching overdue statistics' 
+      message: 'Server error while fetching overdue statistics',
+      error: error.message
     });
   }
 };

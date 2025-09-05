@@ -18,8 +18,8 @@ const getAllowedOrigins = () => {
   }
   // Default origins if not specified
   return [
-    'https://cbt-admin-f.vercel.app', // Replace with your actual Vercel domain
-    'cbt-admin-3jzpolk6t-mcdi.vercel.app', // Example domain
+    'https://your-vercel-domain.vercel.app', // Replace with your actual Vercel domain
+    'https://ceylon-black-taxi-admin.vercel.app', // Example domain
     'http://localhost:3000',
     'http://localhost:9002',
     'http://10.0.2.2:3000', // Android emulator
