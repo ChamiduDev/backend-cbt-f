@@ -6,8 +6,8 @@ const sendEmail = async (options) => {
     port: 587,
     secure: false, // true for 465, false for other ports
     auth: {
-      user: 'MS_mOIKDB@test-zkq340exqnkgd796.mlsender.net',
-      pass: 'mssp.LzHkEIH.3zxk54vkx9xljy6v.VtceXle',
+      user: 'api',
+      pass: 'mlsn.3da9502495e19542642c5848b1198977d985b94993ec20b0d058f5a024d7c38c',
     },
     tls: {
       rejectUnauthorized: false
@@ -15,7 +15,10 @@ const sendEmail = async (options) => {
   });
 
   const mailOptions = {
-    from: 'MS_mOIKDB@test-zkq340exqnkgd796.mlsender.net',
+    from: {
+      name: 'Ceylon Black Taxi',
+      address: 'noreply@ceylonblacktaxi.com'
+    },
     to: options.email,
     subject: options.subject,
     html: options.message,
